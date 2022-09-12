@@ -20,6 +20,9 @@ class FakeDataSource : ReminderDataSource {
     }
 
     override suspend fun getReminder(id: String): Result<ReminderDTO> {
+        if (shouldReturnError) {
+            return Result.Error("Error getting reminder")
+        }
         val reminder = reminders.find { reminderDTO ->
             reminderDTO.id == id
         }
