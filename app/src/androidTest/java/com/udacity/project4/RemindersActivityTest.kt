@@ -1,6 +1,7 @@
 package com.udacity.project4
 
 import android.app.Application
+import android.view.View
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider.getApplicationContext
 import androidx.test.espresso.Espresso.closeSoftKeyboard
@@ -10,6 +11,7 @@ import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.typeText
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.*
+import androidx.test.espresso.matcher.RootMatchers.withDecorView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import com.google.android.gms.maps.model.LatLng
@@ -24,6 +26,7 @@ import com.udacity.project4.util.DataBindingIdlingResource
 import com.udacity.project4.util.monitorActivity
 import com.udacity.project4.utils.EspressoIdlingResource
 import kotlinx.coroutines.runBlocking
+import org.hamcrest.CoreMatchers.not
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -92,7 +95,7 @@ class RemindersActivityTest :
     }
 
     @Test
-    fun createReminder_appearsInRemindersList()  {
+    fun createReminder_appearsInRemindersList() {
         val activityScenario = ActivityScenario.launch(RemindersActivity::class.java)
         dataBindingIdlingResource.monitorActivity(activityScenario)
 
@@ -133,6 +136,120 @@ class RemindersActivityTest :
         ).check(matches(isDisplayed()))
         onView(
             withText("fakeLocation")
+        ).check(matches(isDisplayed()))
+    }
+
+    @Test
+    fun attemptingToSaveReminderWithEmptyTitle_showsErrorSnackbar() {
+
+        val activityScenario = ActivityScenario.launch(RemindersActivity::class.java)
+        dataBindingIdlingResource.monitorActivity(activityScenario)
+
+        // Opening SaveReminderFragment
+        onView(
+            withId(R.id.addReminderFAB)
+        ).perform(click())
+
+        // *** Leaving Title field empty ***
+        onView(
+            withId(R.id.reminderDescription)
+        ).perform(typeText("Description"))
+
+        // Setting Location from the view model
+        val saveReminderViewModel = get<SaveReminderViewModel>()
+        val poi = PointOfInterest(
+            LatLng(0.0, 0.0),
+            "fakeLocation",
+            "fakeLocation"
+        )
+        saveReminderViewModel.addCustomPoi(poi)
+        closeSoftKeyboard()
+
+        // When Attempting to save the reminder
+        onView(
+            withId(R.id.saveReminder)
+        ).perform(click())
+
+        // Then A snackbar with error message should appear
+        onView(
+            withText(R.string.err_enter_title)
+        ).check(matches(isDisplayed()))
+    }
+
+    @Test
+    fun attemptingToSaveReminderWithNoLocation_showsErrorSnackbar() {
+        val activityScenario = ActivityScenario.launch(RemindersActivity::class.java)
+        dataBindingIdlingResource.monitorActivity(activityScenario)
+
+        // Opening SaveReminderFragment
+        onView(
+            withId(R.id.addReminderFAB)
+        ).perform(click())
+
+        // Entering Reminder Data
+        onView(
+            withId(R.id.reminderTitle)
+        ).perform(typeText("Title"))
+        onView(
+            withId(R.id.reminderDescription)
+        ).perform(typeText("Description"))
+        closeSoftKeyboard()
+
+        // When ignoring adding location and save
+        onView(
+            withId(R.id.saveReminder)
+        ).perform(click())
+
+        // Than snackbar with proper message should appear
+        onView(
+            withText(R.string.err_select_location)
+        ).check(matches(isDisplayed()))
+
+    }
+
+    @Test
+    fun savingReminder_showsToastMessage() {
+
+        val activityScenario = ActivityScenario.launch(RemindersActivity::class.java)
+        dataBindingIdlingResource.monitorActivity(activityScenario)
+
+        // Opening SaveReminderFragment
+        onView(
+            withId(R.id.addReminderFAB)
+        ).perform(click())
+
+        // Entering Reminder Data
+        onView(
+            withId(R.id.reminderTitle)
+        ).perform(typeText("Title"))
+        onView(
+            withId(R.id.reminderDescription)
+        ).perform(typeText("Description"))
+
+        // Setting Location from the view model
+        val saveReminderViewModel = get<SaveReminderViewModel>()
+        val poi = PointOfInterest(
+            LatLng(0.0, 0.0),
+            "fakeLocation",
+            "fakeLocation"
+        )
+        saveReminderViewModel.addCustomPoi(poi)
+        closeSoftKeyboard()
+
+        // Saving the reminder
+        onView(
+            withId(R.id.saveReminder)
+        ).perform(click())
+
+        // Then a Toast must appear
+        var decorView: View? = null
+        activityScenario.onActivity {
+            decorView = it.window.decorView
+        }
+        onView(
+            withText(R.string.reminder_saved)
+        ).inRoot(
+            withDecorView(not(decorView))
         ).check(matches(isDisplayed()))
     }
 
