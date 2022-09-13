@@ -1,23 +1,13 @@
 package com.udacity.project4.locationreminders.savereminder.selectreminderlocation
 
-
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.Activity.RESULT_OK
-import android.content.pm.PackageManager
 import android.content.res.Resources
-import android.os.Build
 import android.os.Bundle
-import android.os.Looper
 import android.util.Log
 import android.view.*
-import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
 import androidx.databinding.DataBindingUtil
-import com.google.android.gms.common.api.ResolvableApiException
-import com.google.android.gms.location.*
-import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
@@ -27,6 +17,7 @@ import com.udacity.project4.base.BaseFragment
 import com.udacity.project4.base.NavigationCommand
 import com.udacity.project4.databinding.FragmentSelectLocationBinding
 import com.udacity.project4.locationreminders.savereminder.SaveReminderViewModel
+import com.udacity.project4.utils.checkLocationPermission
 import com.udacity.project4.utils.fadeIn
 import com.udacity.project4.utils.setDisplayHomeAsUpEnabled
 import org.koin.android.ext.android.inject
@@ -39,21 +30,15 @@ class SelectLocationFragment : BaseFragment(), OnMapReadyCallback, GoogleMap.OnP
     private lateinit var binding: FragmentSelectLocationBinding
 
     private lateinit var map: GoogleMap
-    private lateinit var fusedLocationClient: FusedLocationProviderClient
 
-    private val foregroundLocationRequestHandler = registerForActivityResult(
+    @SuppressLint("MissingPermission")
+    private val locationPermissionRequestHandler = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { handleForegroundLocationPermissionResponse(it) }
-
-    private val backgroundLocationPermissionHandler = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { handleBackgroundLocationPermissionResponse(it) }
-
-    private val changeLocationSettingHandler = registerForActivityResult(
-        ActivityResultContracts.StartIntentSenderForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            showUserLocation()
+    ) { granted ->
+        if (granted) {
+            map.isMyLocationEnabled = true
+        } else {
+            _viewModel.showToast.value = "Permission required"
         }
     }
 
@@ -73,13 +58,11 @@ class SelectLocationFragment : BaseFragment(), OnMapReadyCallback, GoogleMap.OnP
 
         val mapFragment = childFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
-        showUserLocation()
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireContext())
         binding.selectLocationFab.setOnClickListener { onLocationSelected() }
     }
 
@@ -116,11 +99,14 @@ class SelectLocationFragment : BaseFragment(), OnMapReadyCallback, GoogleMap.OnP
         else -> super.onOptionsItemSelected(item)
     }
 
-    @SuppressLint("MissingPermission")
     override fun onMapReady(googleMap: GoogleMap) {
         map = googleMap
         setCustomMapStyle()
-        map.isMyLocationEnabled = true
+        if (checkLocationPermission(requireContext())) {
+            map.isMyLocationEnabled = true
+        } else {
+            locationPermissionRequestHandler.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
         map.setOnPoiClickListener(this)
         map.setOnMapLongClickListener(this)
     }
@@ -148,13 +134,6 @@ class SelectLocationFragment : BaseFragment(), OnMapReadyCallback, GoogleMap.OnP
         }
     }
 
-    private fun showUserLocation() {
-        if (!hasLocationPermissions()) {
-            return
-        }
-        requestLocationAndUpdate()
-    }
-
     private fun setMapMarker(location: LatLng) {
         // First remove the current marker because there is only one position selected
         selectedLocationMarker?.remove()
@@ -171,94 +150,6 @@ class SelectLocationFragment : BaseFragment(), OnMapReadyCallback, GoogleMap.OnP
         val selectLocationFab = binding.selectLocationFab
         if (selectLocationFab.visibility != View.VISIBLE) {
             selectLocationFab.fadeIn()
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun requestLocationAndUpdate() {
-        val locationRequest = LocationRequest.create().apply {
-            interval = 10000
-            fastestInterval = 50000
-            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
-        }
-        val builder = LocationSettingsRequest.Builder()
-            .addLocationRequest(locationRequest)
-        val locationSettingsClient = LocationServices.getSettingsClient(requireContext())
-        val task = locationSettingsClient.checkLocationSettings(builder.build())
-        task.addOnSuccessListener {
-            val locationCallback = object : LocationCallback() {
-                override fun onLocationResult(location: LocationResult?) {
-                    location ?: return
-                    val lat = location.lastLocation.latitude
-                    val lng = location.lastLocation.longitude
-                    map.animateCamera(
-                        CameraUpdateFactory.newLatLng(
-                            LatLng(lat, lng)
-                        )
-                    )
-                }
-            }
-            fusedLocationClient.requestLocationUpdates(
-                locationRequest,
-                locationCallback,
-                Looper.getMainLooper()
-            )
-        }
-        task.addOnFailureListener { exception ->
-            if (exception is ResolvableApiException) {
-                changeLocationSettingHandler.launch(
-                    IntentSenderRequest.Builder(exception.resolution).build()
-                )
-            }
-        }
-    }
-
-    /**
-     * Checks for Needed permissions (Fine location and Background location),
-     * if not granted it will send permission requests.
-     * @return true if all needed location permissions are granted, else false.
-     */
-    @SuppressLint("InlinedApi")
-    // No need for warning the background location will not be requested on low apis
-    private fun hasLocationPermissions(): Boolean {
-        val hasForegroundLocationPermission = ContextCompat.checkSelfPermission(
-            requireContext(),
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val hasBackgroundLocationPermission =
-            if (Build.VERSION.SDK_INT >= 29) {
-                val hasPermission = ContextCompat.checkSelfPermission(
-                    requireContext(),
-                    Manifest.permission.ACCESS_BACKGROUND_LOCATION
-                )
-                hasPermission == PackageManager.PERMISSION_GRANTED
-            } else {
-                true
-            }
-        if (!hasForegroundLocationPermission) {
-            foregroundLocationRequestHandler.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-            return false
-        }
-        if (!hasBackgroundLocationPermission) {
-            backgroundLocationPermissionHandler.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-            return false
-        }
-        return true
-    }
-
-    private fun handleForegroundLocationPermissionResponse(granted: Boolean) {
-        if (!granted) {
-            _viewModel.showSnackBar.value = "Location access required"
-        } else {
-            showUserLocation()
-        }
-    }
-
-    private fun handleBackgroundLocationPermissionResponse(granted: Boolean) {
-        if (!granted) {
-            _viewModel.showSnackBar.value = "Background location permission required"
-        } else {
-            showUserLocation()
         }
     }
 
