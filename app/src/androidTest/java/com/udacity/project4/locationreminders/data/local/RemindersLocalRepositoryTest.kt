@@ -75,6 +75,8 @@ class RemindersLocalRepositoryTest {
 
         // Then result must be instance of Result.Error
         assertThat(result, instanceOf(Result.Error::class.java))
+        val errorMessage = (result as Result.Error).message
+        assertThat(errorMessage , `is`("Reminder not found!"))
     }
 
     @Test
