@@ -31,7 +31,8 @@ import com.udacity.project4.utils.fadeIn
 import com.udacity.project4.utils.setDisplayHomeAsUpEnabled
 import org.koin.android.ext.android.inject
 
-class SelectLocationFragment : BaseFragment(), OnMapReadyCallback, GoogleMap.OnPoiClickListener {
+class SelectLocationFragment : BaseFragment(), OnMapReadyCallback, GoogleMap.OnPoiClickListener,
+    GoogleMap.OnMapLongClickListener {
 
     //Use Koin to get the view model of the SaveReminder
     override val _viewModel: SaveReminderViewModel by inject()
@@ -121,16 +122,20 @@ class SelectLocationFragment : BaseFragment(), OnMapReadyCallback, GoogleMap.OnP
         setCustomMapStyle()
         map.isMyLocationEnabled = true
         map.setOnPoiClickListener(this)
+        map.setOnMapLongClickListener(this)
     }
 
     override fun onPoiClick(pointOfInterest: PointOfInterest) {
-        _viewModel.selectedPOI.value = pointOfInterest
-        setMapMarker(pointOfInterest.latLng)
-        // fade select location fab in if not visible
-        val selectLocationFab = binding.selectLocationFab
-        if (selectLocationFab.visibility != View.VISIBLE) {
-            selectLocationFab.fadeIn()
-        }
+        selectLocation(pointOfInterest)
+    }
+
+    override fun onMapLongClick(location: LatLng) {
+        val pointOfInterest = PointOfInterest(
+            LatLng(location.latitude, location.longitude),
+            "custom Location",
+            "custom location"
+        )
+        selectLocation(pointOfInterest)
     }
 
     private fun setCustomMapStyle() {
@@ -157,6 +162,16 @@ class SelectLocationFragment : BaseFragment(), OnMapReadyCallback, GoogleMap.OnP
             MarkerOptions()
                 .position(location)
         )
+    }
+
+    private fun selectLocation(pointOfInterest: PointOfInterest) {
+        _viewModel.selectedPOI.value = pointOfInterest
+        setMapMarker(pointOfInterest.latLng)
+        // fade select location fab in if not visible
+        val selectLocationFab = binding.selectLocationFab
+        if (selectLocationFab.visibility != View.VISIBLE) {
+            selectLocationFab.fadeIn()
+        }
     }
 
     @SuppressLint("MissingPermission")
