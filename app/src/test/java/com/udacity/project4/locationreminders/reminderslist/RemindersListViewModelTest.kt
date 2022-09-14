@@ -85,15 +85,60 @@ class RemindersListViewModelTest {
         mainCoroutineRule.runBlockingTest {
 
             // When adding a reminder and updating
-                fakeDataSource.saveReminder(
-                    ReminderDTO("test", "test", "test", 33.3, 33.3, "tested")
-                )
+            fakeDataSource.saveReminder(
+                ReminderDTO("test", "test", "test", 33.3, 33.3, "tested")
+            )
             remindersListViewModel.loadReminders()
 
             // Then remindersList cannot be null
             val remindersList = remindersListViewModel.remindersList.getOrAwaitValue()
             assertNotNull(remindersList)
         }
+    }
+
+    @Test
+    fun `showLoading value is true while long process is running`() {
+
+        // Given a RemindersListViewModel and data source containing data
+        fakeDataSource = FakeDataSource()
+        remindersListViewModel = RemindersListViewModel(
+            ApplicationProvider.getApplicationContext(),
+            FakeDataSource()
+        )
+
+        // When Calling long running operation like loadReminders()
+        mainCoroutineRule.pauseDispatcher()
+        remindersListViewModel.loadReminders()
+
+        // Then showLoading value must be true
+        val isLoading = remindersListViewModel.showLoading.getOrAwaitValue()
+        assertTrue(isLoading)
+
+        // After resuming the dispatcher so the process can complete
+        mainCoroutineRule.resumeDispatcher()
+        assertFalse(
+            remindersListViewModel.showLoading.getOrAwaitValue()
+        )
+    }
+
+    @Test
+    fun `when data source returns error, showSnackBar must have an error message`() {
+
+        // Given a RemindersListViewModel and data source containing data
+        fakeDataSource = FakeDataSource()
+        remindersListViewModel = RemindersListViewModel(
+            ApplicationProvider.getApplicationContext(),
+            fakeDataSource
+        )
+
+        // When trying to load and an error is returned
+        (fakeDataSource as FakeDataSource).setShouldReturnError(true)
+        remindersListViewModel.loadReminders()
+
+        // Then value of showSnackBar must be the error string
+        val errorValue = remindersListViewModel.showSnackBar.getOrAwaitValue()
+        println(errorValue.toString())
+        assertEquals("Couldn't load reminders", errorValue)
     }
 
 }
